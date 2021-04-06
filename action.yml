@@ -4,6 +4,9 @@ inputs:
   env-key:
     description: 'environemnt key'
     required: true
+  spot_io_token:
+    description: 'Sopt.io access token'
+    required: false
 runs:
   using: 'node12'
   main: 'index.js'

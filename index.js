@@ -1,77 +1,212 @@
 const CORE = require('@actions/core');
+const YAML = require('yaml');
+const fs = require('fs');
 const fetch = require('node-fetch');
-//const YAML = require('yaml');
 const { EC2Client, RebootInstancesCommand } = require("@aws-sdk/client-ec2");
 const { AutoScalingClient, StartInstanceRefreshCommand } = require("@aws-sdk/client-auto-scaling");
 
+// inputs
+const env_key = CORE.getInput('env-key');
+const spot_io_token = CORE.getInput('spot_io_token');
 
-async function main() {
+async function deployTo__ec2_instance(target) {
   try {
 	
+	var region = target['region'];
+	var instanceId = target['id'];
+	var error = false;
 	
-    //const env_key = CORE.getInput('env-key');
-    //console.log('env-key: ' + env_key);
-	//
-	//// AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-	////var ec2_client = new EC2({region: 'us-east-1', maxRetries: 3, apiVersion: '2014-10-01'});
-	//try {
-	//	var ec2_client = new EC2Client({region: 'my-aws-region'});
-	//	
-	//	const ec2_data = await ec2_client.send(new RebootInstancesCommand({
-	//		InstanceIds: ['i-123456'],
-	//		DryRun: true
-	//	}));
-	//	console.log("EC2 instance reboot - Success");
-	//	console.log(ec2_data);
-	//}
-	//catch (error) {
-	//	console.log(error);
-    //}
-	//
-	//try {
-	//	var asg_client = new AutoScalingClient({region: 'my-aws-region'});
-	//	
-	//	const asg_data = await asg_client.send(new StartInstanceRefreshCommand({
-	//		AutoScalingGroupName: 'FooBar',
-	//		Preferences: {
-	//			InstanceWarmup: 360,
-	//			MinHealthyPercentage: 30
-	//		}
-	//	}));
-	//	console.log("ASG instance refresh - Success");
-	//	console.log(asg_data);
-	//}
-	//catch (error) {
-	//	console.log(error);
-    //}
-	//return;
-    
-    //const url = `https://api.spotinst.io/aws/ec2/group/sig-123456/roll?accountId=act-12345`;
-	//var body = {
-	//	batchSizePercentage: 25,
-	//	gracePeriod: 360
-	//};
-	//const response = await fetch(url, {
-    //    method: 'PUT',
-	//	body: JSON.stringify(body),
-    //    headers: {
-	//		'Content-Type': 'application/json',
-	//		'Authorization': 'bearer 987654321'
-	//	}
-    //});
-    //
-    //if (response.ok) {
-  	//  const responseText = await response.text();
-  	//  console.log(`success response: ${responseText}`);
-    //}
-    //else {
-    //  const error = await response.text();
-    //  CORE.setFailed(`An error has occured: ${error}`);
-    //}
+	if (!region) {
+		CORE.setFailed(`ec2-instance target is missing region`);
+		error = true;
+	}
+	if (!instanceId) {
+		CORE.setFailed(`ec2-instance target is missing id`);
+		error = true;
+	}
+	if (error) { return; }
+	
+	var ec2_client = new EC2Client({region: region});
+	const ec2_data = await ec2_client.send(new RebootInstancesCommand({
+		InstanceIds: [instanceId],
+		DryRun: false
+	}));
+	console.log(`EC2 instance ${instanceId} reboot - Success`);
+	//console.log(ec2_data);
   }
   catch (error) {
     CORE.setFailed(error.message);
   }
 }
 
-main()
+async function deployTo__ec2_asg(target) {
+  try {
+	
+	var region = target['region'];
+	var name = target['name'];
+	var instanceWarmup = target['instance-warmup'];
+	var minHealthyPercentage = target['min-healthy-percentage'];
+	var error = false;
+	
+	if (!region) {
+		CORE.setFailed(`ec2-asg target is missing region`);
+		error = true;
+	}
+	if (!name) {
+		CORE.setFailed(`ec2-asg target is missing name`);
+		error = true;
+	}
+	if (!instanceWarmup) {
+		CORE.setFailed(`ec2-asg target is missing instance-warmup`);
+		error = true;
+	}
+	else if (!Number(instanceWarmup)) {
+		CORE.setFailed(`ec2-asg target has invalid instance-warmup`);
+		error = true;
+	}
+	if (!minHealthyPercentage) {
+		CORE.setFailed(`ec2-asg target is missing min-healthy-percentage`);
+		error = true;
+	}
+	else if (!Number(minHealthyPercentage)) {
+		CORE.setFailed(`ec2-asg target has invalid min-healthy-percentage`);
+		error = true;
+	}
+	if (error) { return; }
+	
+	var asg_client = new AutoScalingClient({region: region});
+	const asg_data = await asg_client.send(new StartInstanceRefreshCommand({
+		AutoScalingGroupName: name,
+		Preferences: {
+			InstanceWarmup: Number(instanceWarmup),
+			MinHealthyPercentage: Number(minHealthyPercentage)
+		}
+	}));
+	console.log(`ASG ${name} refresh - Success`);
+	//console.log(asg_data);
+  }
+  catch (error) {
+    CORE.setFailed(error.message);
+  }
+}
+
+async function deployTo__spotinst_eg(target) {
+  try {
+	
+	var id = target['id'];
+	var accountId = target['account-id'];
+	var batchSizePercentage = target['batch-size-percentage'];
+	var gracePeriod = target['grace-period'];
+	var error = false;
+	
+	if (!id) {
+		CORE.setFailed(`spotinst-eg target is missing id`);
+		error = true;
+	}
+	if (!accountId) {
+		CORE.setFailed(`spotinst-eg target is missing account-id`);
+		error = true;
+	}
+	if (!batchSizePercentage) {
+		CORE.setFailed(`spotinst-eg target is missing batch-size-percentage`);
+		error = true;
+	}
+	else if (!Number(batchSizePercentage)) {
+		CORE.setFailed(`spotinst-eg target has invalid batch-size-percentage`);
+		error = true;
+	}
+	if (!gracePeriod) {
+		CORE.setFailed(`spotinst-eg target is missing grace-period`);
+		error = true;
+	}
+	else if (!Number(gracePeriod)) {
+		CORE.setFailed(`spotinst-eg target has invalid grace-period`);
+		error = true;
+	}
+	if (error) { return; }
+	
+	const url = `https://api.spotinst.io/aws/ec2/group/${id}/roll?accountId=${accountId}`;
+	var body = {
+		batchSizePercentage: Number(batchSizePercentage),
+		gracePeriod: Number(gracePeriod)
+	};
+	const response = await fetch(url, {
+        method: 'PUT',
+		body: JSON.stringify(body),
+        headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `bearer ${spot_io_token}`
+		}
+    });
+    
+    if (response.ok) {
+	  console.log(`Spotinst EG ${id} refresh - Success`);
+	  //console.log(response.text());
+    }
+    else {
+      const error = await response.text();
+      CORE.setFailed(`An error has occured: ${error}`);
+    }
+  }
+  catch (error) {
+    CORE.setFailed(error.message);
+  }
+}
+
+async function deployToTarget(target) {
+  try {
+	
+	if (!target) { return; }
+	
+	const targetType = target['type'];
+	
+	if (!targetType) {
+		CORE.setFailed(`target is missing type`);
+		return;
+	}
+	
+	switch(targetType) {
+      case "ec2-instance":
+        await deployTo__ec2_instance(target);
+        break;
+      case "ec2-asg":
+        await deployTo__ec2_asg(target);
+        break;
+      case "spotinst-eg":
+        await deployTo__spotinst_eg(target);
+        break;
+      default:
+        CORE.setFailed(`target type '${targetType}' is not supported`);
+    }
+  }
+  catch (error) {
+    CORE.setFailed(error.message);
+  }
+}
+
+async function main() {
+  try {
+	
+    //console.log(`env_key ${env_key}, spot_io_token ${spot_io_token}`);
+	
+	const file = fs.readFileSync('.automation/deployment_envs.yaml', 'utf8');
+	var yamlObj = YAML.parse(file);
+	var envs = yamlObj['envs'];
+	var requested_env = envs[env_key];
+	if (!requested_env) {
+		CORE.setFailed(`requested env (${env_key}) is missing`);
+		return;
+	}
+	
+	var targets = requested_env['targets'];
+	if (targets && targets.length > 0) {
+		console.log(`${env_key} has ${targets.length} targets`);
+		targets.forEach(deployToTarget);
+	}
+  }
+  catch (error) {
+    CORE.setFailed(error.message);
+  }
+}
+
+main();
