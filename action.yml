@@ -1,0 +1,9 @@
+name: 'Deploy to targets'
+description: 'deploy to targets'
+inputs:
+  env-key:
+    description: 'environemnt key'
+    required: true
+runs:
+  using: 'node12'
+  main: 'index.js'
