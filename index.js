@@ -123,7 +123,7 @@ async function deployTo__ecs_service(target) {
 	//console.log(asg_data);
   }
   catch (error) {
-    CORE.setFailed(error);
+    CORE.setFailed(JSON.stringify(error, null, 2));
   }
 }
 
