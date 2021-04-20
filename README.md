@@ -28,6 +28,11 @@ envs:
       instance-warmup: 360
       min-healthy-percentage: 30
       
+    - type: ecs-service
+      region: us-east-1
+      cluster-name: MyCluster
+      service-name: ServiceInCluster
+      
     - type: spotinst-eg
       id: sig-12345
       account-id: act-12345
@@ -58,6 +63,18 @@ Properties:
 `instance-warmup` - How much time it takes a newly launched instance to be ready to use (in seconds).
 
 `min-healthy-percentage` - At least this percentage of the desired capacity of the Auto Scaling group must remain healthy during this operation to allow it to continue.
+
+### Target: `ecs-service`
+
+Starts a new deployment for an ECS service.
+
+Properties:
+
+`region` - AWS region
+
+`cluster-name` - AWS ECS Cluster of the service. Use the cluster's name or ARN.
+
+`service-name` - The name of the service to deploy.
 
 ### Target: `spotinst-eg`
 

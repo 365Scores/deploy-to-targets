@@ -4,6 +4,7 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const { EC2Client, RebootInstancesCommand } = require("@aws-sdk/client-ec2");
 const { AutoScalingClient, StartInstanceRefreshCommand } = require("@aws-sdk/client-auto-scaling");
+const { ECSClient, UpdateServiceCommand } = require("@aws-sdk/client-ecs");
 
 // inputs
 const env_key = CORE.getInput('env-key');
@@ -35,7 +36,7 @@ async function deployTo__ec2_instance(target) {
 	//console.log(ec2_data);
   }
   catch (error) {
-    CORE.setFailed(error.message);
+    CORE.setFailed(error);
   }
 }
 
@@ -82,11 +83,47 @@ async function deployTo__ec2_asg(target) {
 			MinHealthyPercentage: Number(minHealthyPercentage)
 		}
 	}));
-	console.log(`ASG ${name} refresh - Success`);
+	console.log(`ASG ${name} instance refresh - Success`);
 	//console.log(asg_data);
   }
   catch (error) {
-    CORE.setFailed(error.message);
+    CORE.setFailed(error);
+  }
+}
+
+async function deployTo__ecs_service(target) {
+  try {
+	
+	var region = target['region'];
+	var clusterName = target['cluster-name'];
+	var serviceName = target['service-name'];
+	var error = false;
+	
+	if (!region) {
+		CORE.setFailed(`ecs-service target is missing region`);
+		error = true;
+	}
+	if (!clusterName) {
+		CORE.setFailed(`ecs-service target is missing cluster-name`);
+		error = true;
+	}
+	if (!serviceName) {
+		CORE.setFailed(`ecs-service target is missing service-name`);
+		error = true;
+	}
+	if (error) { return; }
+	
+	var asg_client = new ECSClient({region: region});
+	const asg_data = await asg_client.send(new UpdateServiceCommand({
+		cluster: clusterName,
+		service: serviceName,
+		forceNewDeployment: true
+	}));
+	console.log(`ECS service ${serviceName} deployment - Success`);
+	//console.log(asg_data);
+  }
+  catch (error) {
+    CORE.setFailed(error);
   }
 }
 
@@ -140,7 +177,7 @@ async function deployTo__spotinst_eg(target) {
     });
     
     if (response.ok) {
-	  console.log(`Spotinst EG ${id} refresh - Success`);
+	  console.log(`Spotinst EG ${id} roll - Success`);
 	  //console.log(response.text());
     }
     else {
@@ -149,7 +186,7 @@ async function deployTo__spotinst_eg(target) {
     }
   }
   catch (error) {
-    CORE.setFailed(error.message);
+    CORE.setFailed(error);
   }
 }
 
@@ -172,6 +209,9 @@ async function deployToTarget(target) {
       case "ec2-asg":
         await deployTo__ec2_asg(target);
         break;
+      case "ecs-service":
+        await deployTo__ecs_service(target);
+        break;
       case "spotinst-eg":
         await deployTo__spotinst_eg(target);
         break;
@@ -180,7 +220,7 @@ async function deployToTarget(target) {
     }
   }
   catch (error) {
-    CORE.setFailed(error.message);
+    CORE.setFailed(error);
   }
 }
 
@@ -205,7 +245,7 @@ async function main() {
 	}
   }
   catch (error) {
-    CORE.setFailed(error.message);
+    CORE.setFailed(error);
   }
 }
 
